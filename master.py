@@ -1,13 +1,55 @@
+import os
 import json
 import time
 import MetaTrader5 as mt5
 import redis
 
-# ตั้งค่าทางเดินโปรแกรมตามที่ระบุ
-MASTER_PATH = r"C:\Program Files\MetaTrader 5 - Copy (2)\terminal64.exe"
-REDIS_CHAN = "copy_trade_gold"
+CONFIG_FILE = "config.json"
 
-r = redis.Redis(host="localhost", port=6379, db=0)
+# ค่าคอนฟิกเริ่มต้น (Default Configuration)
+default_config = {
+    "redis": {
+        "host": "localhost",
+        "port": 6379,
+        "db": 0,
+        "channel": "copy_trade_gold"
+    },
+    "master": {
+        "terminal_path": r"C:\Program Files\MetaTrader 5 - Copy (2)\terminal64.exe",
+        "poll_interval_seconds": 0.05
+    },
+    "client": {
+        "terminal_path": r"C:\Program Files\MetaTrader 5\terminal64.exe",
+        "gold_symbol": "XAUUSD-ECN",
+        "lot_multiplier": 0.5,
+        "lot_minimum": 0.01,
+        "magic_number": 999999,
+        "deviation": 20
+    }
+}
+
+# โหลดคอนฟิกจากไฟล์ json
+if not os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(default_config, f, indent=4, ensure_ascii=False)
+    print(f"Created default configuration file: {CONFIG_FILE}")
+
+with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+# ดึงค่าคอนฟิกไปใช้งาน
+redis_conf = config.get("redis", default_config["redis"])
+master_conf = config.get("master", default_config["master"])
+
+MASTER_PATH = master_conf.get("terminal_path", default_config["master"]["terminal_path"])
+REDIS_CHAN = redis_conf.get("channel", default_config["redis"]["channel"])
+POLL_INTERVAL = master_conf.get("poll_interval_seconds", default_config["master"]["poll_interval_seconds"])
+
+r = redis.Redis(
+    host=redis_conf.get("host", "localhost"),
+    port=redis_conf.get("port", 6379),
+    db=redis_conf.get("db", 0)
+)
 
 if not mt5.initialize(path=MASTER_PATH):
     print("Master init failed")
@@ -23,7 +65,7 @@ while True:
     positions = mt5.positions_get()
     
     if positions is None:
-        time.sleep(0.05)
+        time.sleep(POLL_INTERVAL)
         continue
 
     current_positions = {p.ticket: p for p in positions}
@@ -54,4 +96,4 @@ while True:
             print(f"[Master] Detected Close: Ticket {ticket}")
 
     last_positions = current_positions
-    time.sleep(0.05) # หน่วงเวลา 50ms เพื่อไม่ให้ CPU ทำงานหนักเกินไป
+    time.sleep(POLL_INTERVAL) # หน่วงเวลาตามที่กำหนดใน config เพื่อไม่ให้ CPU ทำงานหนักเกินไป

@@ -1,278 +1,173 @@
 # 📈 MT5 Investor CopyTrade (Gold Edition)
 
-     [![Python
-     Version](https://img.shields.io/badge/python-3.8%2B-
-blue)](
-     https://www.python.org/)
-     [![MetaTrader
-     5](https://img.shields.io/badge/MetaTrader-5-
-blue)](https:/
-     /www.metatrader5.com/)
-     [![Redis](https://img.shields.io/badge/Redis-Broker-
-red)](h
-     ttps://redis.io/)
-     [![License:
-     MIT](https://img.shields.io/badge/License-MIT-
-yellow.svg)](
-     LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![MetaTrader 5](https://img.shields.io/badge/MetaTrader-5-blue)](https://www.metatrader5.com/)
+[![Redis](https://img.shields.io/badge/Redis-Broker-red)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-     ระบบก๊อปปี้เทรดทองคำ (XAUUSD) อัจฉริยะ ทำงานแบบเรียลไทม์
-     (Real-time Latency) โดยทำการคัดลอกคำสั่งซื้อขายจากพอร์ต
-     **Investor** (ซึ่งเชื่อมต่อผ่านรหัสผ่านสำหรับผู้สังเกตการณ์
-     หรือ Investor Password
-     ได้เพื่อความปลอดภัยสูงสุดและไม่จำเป็นต้องเป็นพอร์ตเทรดหลักข
-     องเรา)
-     ไปยังพอร์ต **Client** ส่งผ่านข้อมูลเปิด/ปิดออเดอร์ด้วยระบบ
-     **Redis Pub/Sub** ที่มีความรวดเร็วสูง พร้อมหน้าต่างควบคุม
-     **GUI (Tkinter Dashboard)**
-     ที่ช่วยให้ตั้งค่าและควบคุมระบบทั้งหมดได้ในหน้าเดียว
+ระบบก๊อปปี้เทรดทองคำ (XAUUSD) อัจฉริยะ ทำงานแบบเรียลไทม์ (Real-time Latency) โดยทำการคัดลอกคำสั่งซื้อขายจากพอร์ต **Investor** (ซึ่งเชื่อมต่อผ่านรหัสผ่านสำหรับผู้สังเกตการณ์ หรือ Investor Password ได้เพื่อความปลอดภัยสูงสุดและไม่จำเป็นต้องเป็นพอร์ตเทรดหลักของเรา) ไปยังพอร์ต **Client** ส่งผ่านข้อมูลเปิด/ปิดออเดอร์ด้วยระบบ **Redis Pub/Sub** ที่มีความรวดเร็วสูง พร้อมหน้าต่างควบคุม **GUI (Tkinter Dashboard)** ที่ช่วยให้ตั้งค่าและควบคุมระบบทั้งหมดได้ในหน้าเดียว
 
-     ---
+---
 
-     ## 🏗️ สถาปัตยกรรมและโครงสร้างระบบ (Architecture Flow)
+## 🏗️ สถาปัตยกรรมและโครงสร้างระบบ (Architecture Flow)
 
-     ระบบประกอบไปด้วยส่วนการทำงานหลัก 3 ส่วน
-     ที่ประสานงานร่วมกันแบบคู่ขนาน:
+ระบบประกอบไปด้วยส่วนการทำงานหลัก 3 ส่วน ที่ประสานงานร่วมกันแบบคู่ขนาน:
 
-     ```mermaid
-     flowchart TD
-         subgraph Execution_Environment ["Execution
-     Environment"]
-             subgraph Investor_Account ["พอร์ตต้นแบบ (Investor
-     Account - Read Only)"]
-                 MT5_Investor["MetaTrader 5 Terminal"]
-             end
+```mermaid
+flowchart TD
+    subgraph Execution_Environment ["Execution Environment"]
+        subgraph Investor_Account ["พอร์ตต้นแบบ (Investor Account - Read Only)"]
+            MT5_Investor["MetaTrader 5 Terminal"]
+        end
 
-             subgraph Client_Account ["พอร์ตปลายทาง (Client
-     Account - Trading)"]
-                 MT5_Client["MetaTrader 5 Terminal"]
-             end
+        subgraph Client_Account ["พอร์ตปลายทาง (Client Account - Trading)"]
+            MT5_Client["MetaTrader 5 Terminal"]
+        end
 
-             subgraph CopyTrade_System ["ระบบ CopyTrade"]
+        subgraph CopyTrade_System ["ระบบ CopyTrade"]
+            investor_py["investor.py\n(คอยตรวจจับและส่งสัญญาณ)"]
+            client_py["client.py\n(คอยรับสัญญาณและเปิดปิดออเดอร์)"]
+            dashboard_py["dashboard.py\n(หน้าต่างควบคุม GUI)"]
+            config_json["config.json\n(เก็บค่าการตั้งค่า)"]
+            mappings_json["mappings.json\n(จดจำตั๋วคำสั่งซื้อขาย)"]
+        end
 
-     investor_py["investor.py\n(คอยตรวจจับและส่งสัญญาณ)"]
+        subgraph Message_Broker ["ฐานข้อมูลส่งผ่านข้อมูล"]
+            Redis[(Redis Pub/Sub)]
+        end
+    end
 
-     client_py["client.py\n(คอยรับสัญญาณและเปิดปิดออเดอร์)"]
-                 dashboard_py["dashboard.py\n(หน้าต่างควบคุม
-     GUI)"]
-                 config_json["config.json\n(เก็บค่าการตั้งค่า)"]
+    %% Investor Tracking
+    MT5_Investor -->|ดึงสถานะออเดอร์ล่าสุด| investor_py
+    investor_py -->|เมื่อเกิดออเดอร์ OPEN/CLOSE| Redis
 
-     mappings_json["mappings.json\n(จดจำตั๋วคำสั่งซื้อขาย)"]
-             end
+    %% Client Execution
+    Redis -->|กระจายสัญญาณเรียลไทม์| client_py
+    client_py -->|ส่งคำสั่งซื้อขาย/ปิดคำสั่ง| MT5_Client
+    client_py <-->|บันทึก/โหลดคู่ตั๋ว| mappings_json
 
-             subgraph Message_Broker ["ฐานข้อมูลส่งผ่านข้อมูล"]
-                 Redis[(Redis Pub/Sub)]
-             end
-         end
+    %% GUI Control
+    dashboard_py <-->|อ่าน/เขียนข้อมูลการตั้งค่า| config_json
+    dashboard_py -->|เริ่ม/หยุดการทำงาน (Subprocess)| investor_py
+    dashboard_py -->|เริ่ม/หยุดการทำงาน (Subprocess)| client_py
+    investor_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
+    client_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
+```
 
-         %% Investor Tracking
-         MT5_Investor -->|ดึงสถานะออเดอร์ล่าสุด| investor_py
-         investor_py -->|เมื่อเกิดออเดอร์ OPEN/CLOSE| Redis
+---
 
-         %% Client Execution
-         Redis -->|กระจายสัญญาณเรียลไทม์| client_py
-         client_py -->|ส่งคำสั่งซื้อขาย/ปิดคำสั่ง| MT5_Client
-         client_py <-->|บันทึก/โหลดคู่ตั๋ว| mappings_json
+## 🌟 ฟีเจอร์เด่น (Key Features)
 
-         %% GUI Control
-         dashboard_py <-->|อ่าน/เขียนข้อมูลการตั้งค่า|
-     config_json
-         dashboard_py -->|เริ่ม/หยุดการทำงาน (Subprocess)|
-     investor_py
-         dashboard_py -->|เริ่ม/หยุดการทำงาน (Subprocess)|
-     client_py
-         investor_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
-         client_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
-     ```
+- **Investor Password Compatibility**: พอร์ตฝั่ง Investor ใช้เพียงรหัสผ่าน Investor (ดูได้อย่างเดียว) ในการตรวจจับสัญญาณ ทำให้ปลอดภัย 100% ไม่มีโอกาสสั่งซื้อหรือทำอันตรายต่อพอร์ตส่งสัญญาณได้เลย
+- **Ultra-low Latency (Redis)**: ส่งต่อสัญญาณการเข้าและปิดออเดอร์ในระดับมิลลิวินาที (Millisecond) ผ่านช่องส่งข้อมูล Redis Pub/Sub
+- **Order State Recovery (`mappings.json`)**: จดจำตั๋วสั่งซื้อ (Ticket Mapping) ระหว่างฝั่ง Investor และ Client เสมอ หากระบบขัดข้อง ดับ หรือทำการปิดโปรแกรมชั่วคราว เมื่อเปิดระบบขึ้นมาใหม่จะสามารถจดจำคู่ตั๋วเดิมเพื่อตามปิดออเดอร์ได้อย่างสมบูรณ์แบบ
+- **Symbol Custom Mapping**: สัญลักษณ์ทองคำของแต่ละโบรกเกอร์อาจมีชื่อเรียกไม่เหมือนกัน (เช่น พอร์ตต้นแบบชื่อ `XAUUSD` พอร์ตปลายทางชื่อ `XAUUSD-ECN` หรือ `XAUUSD.m`) ระบบสามารถทำการแปลงสัญลักษณ์ทองคำไปฝั่ง Client ได้อย่างชาญฉลาด
+- **Smart Lot Calculation**:
+  - `lot_multiplier`: กำหนดสัดส่วนคูณล็อต (เช่น Investor เปิดล็อต `1.0` หากคูณล็อต `0.5` พอร์ต Client จะเปิดล็อต `0.5`)
+  - `lot_minimum`: กำหนดเพดานขั้นต่ำสุดเพื่อป้องกันข้อผิดพลาดในการคำนวณล็อตต่ำสุด
+- **Dynamic Logging Interface**: GUI แสดง Log การรับส่งสัญญาณและข้อผิดพลาดต่าง ๆ สดจาก `investor.py` และ `client.py` ได้ในตัว
 
-     ---
+---
 
-     ## 🌟 ฟีเจอร์เด่น (Key Features)
+## 📋 สิ่งที่ต้องมี (Prerequisites)
 
-     - **Investor Password Compatibility**: พอร์ตฝั่ง Investor
-     ใช้เพียงรหัสผ่าน Investor (ดูได้อย่างเดียว)
-     ในการตรวจจับสัญญาณ ทำให้ปลอดภัย 100%
-     ไม่มีโอกาสสั่งซื้อหรือทำอันตรายต่อพอร์ตส่งสัญญาณได้เลย
-     - **Ultra-low Latency (Redis)**:
-     ส่งต่อสัญญาณการเข้าและปิดออเดอร์ในระดับมิลลิวินาที
-     (Millisecond) ผ่านช่องส่งข้อมูล Redis Pub/Sub
-     - **Order State Recovery (`mappings.json`)**:
-     จดจำตั๋วสั่งซื้อ (Ticket Mapping) ระหว่างฝั่ง Investor และ
-     Client เสมอ หากระบบขัดข้อง ดับ หรือทำการปิดโปรแกรมชั่วคราว
-     เมื่อเปิดระบบขึ้นมาใหม่จะสามารถจดจำคู่ตั๋วเดิมเพื่อตามปิดออ
-     เดอร์ได้อย่างสมบูรณ์แบบ
-     - **Symbol Custom Mapping**:
-     สัญลักษณ์ทองคำของแต่ละโบรกเกอร์อาจมีชื่อเรียกไม่เหมือนกัน
-     (เช่น พอร์ตต้นแบบชื่อ `XAUUSD` พอร์ตปลายทางชื่อ
-     `XAUUSD-ECN` หรือ `XAUUSD.m`)
-     ระบบสามารถทำการแปลงสัญลักษณ์ทองคำไปฝั่ง Client
-     ได้อย่างชาญฉลาด
-     - **Smart Lot Calculation**:
-       - `lot_multiplier`: กำหนดสัดส่วนคูณล็อต (เช่น Investor
-     เปิดล็อต `1.0` หากคูณล็อต `0.5` พอร์ต Client จะเปิดล็อต
-     `0.5`)
-       - `lot_minimum`:
-     กำหนดเพดานขั้นต่ำสุดเพื่อป้องกันข้อผิดพลาดในการคำนวณล็อตต่ำ
-     สุด
-     - **Dynamic Logging Interface**: GUI แสดง Log
-     การรับส่งสัญญาณและข้อผิดพลาดต่าง ๆ สดจาก `investor.py` และ
-     `client.py` ได้ในตัว
+การเปิดใช้งานระบบนี้จำเป็นต้องเตรียมความพร้อมในส่วนต่าง ๆ ดังนี้:
 
-     ---
+### 1. โปรแกรม MetaTrader 5 จำนวน 2 ตัวติดตั้ง (แยกโฟลเดอร์กัน)
+*   **โปรแกรม MT5 ตัวที่ 1 (พอร์ต Investor)**: ล็อกอินบัญชีที่เราต้องการก๊อปปี้ (พอร์ตต้นแบบ) แนะนำให้ล็อกอินด้วย **"Investor Password"** (รหัสผ่านสำหรับดูอย่างเดียว) เพื่อความปลอดภัยสูงสุด
+*   **โปรแกรม MT5 ตัวที่ 2 (พอร์ต Client)**: ล็อกอินบัญชีที่เราต้องการส่งคำสั่งเทรดจริง (พอร์ตปลายทาง) ต้องล็อกอินด้วย **"Trading/Master Password"** (รหัสผ่านหลักที่เปิดปิดออเดอร์ได้)
+*   **ข้อสำคัญ**: ต้องแยกโฟลเดอร์ติดตั้งของโปรแกรม MT5 ทั้งสองตัวออกจากกัน เพื่อให้สามารถเปิดใช้งานพร้อมกันได้สองหน้าต่าง
 
-     ## 📋 สิ่งที่ต้องมี (Prerequisites)
+### 2. การอนุญาต Algo Trading ในโปรแกรม MT5 (ฝั่ง Client)
+โปรแกรม MT5 ฝั่งปลายทาง (Client) จำเป็นต้องเปิดสิทธิ์การส่งคำสั่งอัตโนมัติจากภายนอก:
+1.  เปิดโปรแกรม MT5 ฝั่ง Client
+2.  ไปที่เมนู **Tools** -> **Options** (หรือกด `Ctrl + O`)
+3.  เลือกแท็บ **Expert Advisors**
+4.  ติ๊กเลือกถูกที่ช่อง **"Allow Algo Trading"**
+5.  กดปุ่ม **OK**
 
-     การเปิดใช้งานระบบนี้จำเป็นต้องเตรียมความพร้อมในส่วนต่าง ๆ
-     ดังนี้:
+### 3. โปรแกรม Python
+*   ติดตั้ง **Python เวอร์ชัน 3.8 ขึ้นไป** ในเครื่องคอมพิวเตอร์ของคุณ
 
-     ### 1. โปรแกรม MetaTrader 5 จำนวน 2 ตัวติดตั้ง
-     (แยกโฟลเดอร์กัน)
-     *   **โปรแกรม MT5 ตัวที่ 1 (พอร์ต Investor)**:
-     ล็อกอินบัญชีที่เราต้องการก๊อปปี้ (พอร์ตต้นแบบ)
-     แนะนำให้ล็อกอินด้วย **"Investor Password"**
-     (รหัสผ่านสำหรับดูอย่างเดียว) เพื่อความปลอดภัยสูงสุด
-     *   **โปรแกรม MT5 ตัวที่ 2 (พอร์ต Client)**:
-     ล็อกอินบัญชีที่เราต้องการส่งคำสั่งเทรดจริง (พอร์ตปลายทาง)
-     ต้องล็อกอินด้วย **"Trading/Master Password"**
-     (รหัสผ่านหลักที่เปิดปิดออเดอร์ได้)
-     *   **ข้อสำคัญ**: ต้องแยกโฟลเดอร์ติดตั้งของโปรแกรม MT5
-     ทั้งสองตัวออกจากกัน
-     เพื่อให้สามารถเปิดใช้งานพร้อมกันได้สองหน้าต่าง
+### 4. Redis Server (Message Broker)
+*   ติดตั้งโปรแกรม **Redis Server** หรือใช้บริการ Redis Cloud (พอร์ตมาตรฐานคือ `6379`) สำหรับใช้ส่งสัญญาณระหว่างไฟล์ Python
 
-     ### 2. การอนุญาต Algo Trading ในโปรแกรม MT5 (ฝั่ง Client)
-     โปรแกรม MT5 ฝั่งปลายทาง (Client)
-     จำเป็นต้องเปิดสิทธิ์การส่งคำสั่งอัตโนมัติจากภายนอก:
-     1.  เปิดโปรแกรม MT5 ฝั่ง Client
-     2.  ไปที่เมนู **Tools** -> **Options** (หรือกด `Ctrl + O`)
-     3.  เลือกแท็บ **Expert Advisors**
-     4.  ติ๊กเลือกถูกที่ช่อง **"Allow Algo Trading"**
-     5.  กดปุ่ม **OK**
+---
 
-     ### 3. โปรแกรม Python
-     *   ติดตั้ง **Python เวอร์ชัน 3.8 ขึ้นไป**
-     ในเครื่องคอมพิวเตอร์ของคุณ
+## ⚙️ โครงสร้างไฟล์ในโปรเจค (File Structure)
 
-     ### 4. Redis Server (Message Broker)
-     *   ติดตั้งโปรแกรม **Redis Server** หรือใช้บริการ Redis
-     Cloud (พอร์ตมาตรฐานคือ `6379`)
-     สำหรับใช้ส่งสัญญาณระหว่างไฟล์ Python
+```text
+mt5-investor-copytrade/
+├── investor.py        # ตรวจสอบคำสั่งซื้อขายของพอร์ต Investor และส่งกระจายสัญญาณผ่าน Redis
+├── client.py          # รอรับสัญญาณออเดอร์จาก Redis เพื่อสั่งเปิด/ปิดออเดอร์จริงบน Client
+├── dashboard.py       # หน้าต่าง GUI ควบคุมโปรแกรมทั้งหมด สั่งรัน/หยุด และแสดง Log
+├── config.json        # เก็บการตั้งค่าตำแหน่งโปรแกรม, Redis และ Lot (สร้างอัตโนมัติเมื่อรันแรกสุด)
+├── mappings.json      # จดจำความสัมพันธ์คู่ตั๋วออเดอร์ Investor <-> Client (สร้างขณะรัน)
+├── requirements.txt   # รายชื่อแพ็กเกจไลบรารี Python ที่โปรเจคต้องการ
+└── LICENSE            # สัญญาอนุญาตซอฟต์แวร์แบบ MIT
+```
 
-     ---
+---
 
-     ## ⚙️ โครงสร้างไฟล์ในโปรเจค (File Structure)
+## 🚀 ขั้นตอนการติดตั้งและการใช้งานอย่างละเอียด (Usage Guide)
 
-     ```text
-     mt5-investor-copytrade/
-     ├── investor.py        # ตรวจสอบคำสั่งซื้อขายของพอร์ต
-     Investor และส่งกระจายสัญญาณผ่าน Redis
-     ├── client.py          # รอรับสัญญาณออเดอร์จาก Redis
-     เพื่อสั่งเปิด/ปิดออเดอร์จริงบน Client
-     ├── dashboard.py       # หน้าต่าง GUI ควบคุมโปรแกรมทั้งหมด
-     สั่งรัน/หยุด และแสดง Log
-     ├── config.json        # เก็บการตั้งค่าตำแหน่งโปรแกรม,
-     Redis และ Lot (สร้างอัตโนมัติเมื่อรันแรกสุด)
-     ├── mappings.json      # จดจำความสัมพันธ์คู่ตั๋วออเดอร์
-     Investor <-> Client (สร้างขณะรัน)
-     ├── requirements.txt   # รายชื่อแพ็กเกจไลบรารี Python
-     ที่โปรเจคต้องการ
-     └── LICENSE            # สัญญาอนุญาตซอฟต์แวร์แบบ MIT
-     ```
+### ขั้นตอนที่ 1: ดาวน์โหลดโปรเจค
+ดาวน์โหลดหรือโคลนโปรเจคนี้ลงมายังเครื่องคอมพิวเตอร์:
+```bash
+git clone https://github.com/BlamzKunG/mt5-investor-copytrade.git
+cd mt5-investor-copytrade
+```
 
-     ---
+### ขั้นตอนที่ 2: ติดตั้ง Dependencies
+เปิดหน้าจอ Command Line ในโฟลเดอร์โปรเจค แล้วติดตั้งไลบรารีที่จำเป็นผ่านคำสั่ง:
+```bash
+pip install -r requirements.txt
+```
 
-     ## 🚀 ขั้นตอนการติดตั้งและการใช้งานอย่างละเอียด (Usage
-     Guide)
+### ขั้นตอนที่ 3: เปิดใช้งาน Redis Server
+ตรวจสอบให้แน่ใจว่าได้เปิดใช้งาน **Redis Server** แล้ว (ทำงานที่พอร์ตเริ่มต้น `6379`)
 
-     ### ขั้นตอนที่ 1: ดาวน์โหลดโปรเจค
-     ดาวน์โหลดหรือโคลนโปรเจคนี้ลงมายังเครื่องคอมพิวเตอร์:
-     ```bash
-     git clone
-     https://github.com/BlamzKunG/mt5-investor-copytrade.git
-     cd mt5-investor-copytrade
-     ```
+### ขั้นตอนที่ 4: เปิดหน้าควบคุมโปรแกรม (Dashboard)
+สั่งรันไฟล์ควบคุมหลักเพื่อเปิดหน้า GUI:
+```bash
+python dashboard.py
+```
+*(เมื่อเปิดครั้งแรก ระบบจะสแกนหาและสร้างไฟล์ `config.json` ให้โดยอัตโนมัติ)*
 
-     ### ขั้นตอนที่ 2: ติดตั้ง Dependencies
-     เปิดหน้าจอ Command Line ในโฟลเดอร์โปรเจค
-     แล้วติดตั้งไลบรารีที่จำเป็นผ่านคำสั่ง:
-     ```bash
-     pip install -r requirements.txt
-     ```
+### ขั้นตอนที่ 5: ตั้งค่าผ่านหน้าจอ GUI
+กรอกรายละเอียดต่าง ๆ บนหน้าต่างควบคุม:
 
-     ### ขั้นตอนที่ 3: เปิดใช้งาน Redis Server
-     ตรวจสอบให้แน่ใจว่าได้เปิดใช้งาน **Redis Server** แล้ว
-     (ทำงานที่พอร์ตเริ่มต้น `6379`)
+1.  **MetaTrader 5 Terminals Configuration**:
+    *   **Investor Terminal (.exe)**: กดปุ่ม **Browse...** แล้วเลือกไฟล์ `terminal64.exe` ของโปรแกรม MT5 ที่ล็อกอินพอร์ต Investor ไว้
+    *   **Client Terminal (.exe)**: กดปุ่ม **Browse...** แล้วเลือกไฟล์ `terminal64.exe` ของโปรแกรม MT5 ที่ล็อกอินพอร์ต Client ไว้
+2.  **Redis Connection**:
+    *   **Redis Host**: พิมพ์ `localhost` (หรือใส่ IP/Host ปลายทางกรณีใช้ Redis Server ภายนอก)
+    *   **Redis Port**: ใส่ `6379`
+    *   **Redis DB**: ใส่ `0`
+    *   **Channel Name**: พิมพ์ชื่อช่องส่งสัญญาณ เช่น `copy_trade_gold`
+3.  **Copy Trade Settings**:
+    *   **Gold Symbol**: ระบุสัญลักษณ์ทองคำของพอร์ตปลายทาง (Client) เช่น `XAUUSD`, `XAUUSD-ECN`, หรือ `XAUUSD.m` (โปรดเช็คตัวสะกดจากโปรแกรมเทรดให้ตรงกัน)
+    *   **Lot Multiplier**: อัตราตัวคูณในการก๊อปปี้ล็อต เช่น ใส่ `0.5` หาก Investor เปิดล็อตขนาด `1.0` ล็อตฝั่ง Client จะเปิดจริงที่ `0.5`
+    *   **Min Lot Limit**: ขนาดล็อตขั้นต่ำที่ระบบสามารถกดเปิดได้ เช่น `0.01`
+    *   **Poll Interval (s)**: ความถี่ในการสแกนพอร์ต Investor (แนะนำตั้งไว้ที่ `0.05` วินาที)
+    *   **Magic Number**: หมายเลขเมจิกเพื่อคัดแยกคำสั่งซื้อขายของระบบ (เช่น `999999`)
+    *   **Max Deviation**: ค่าเบี่ยงเบนราคาที่ยอมรับได้สูงสุดในการกดคำสั่งซื้อขาย (เช่น `20` จุด)
 
-     ### ขั้นตอนที่ 4: เปิดหน้าควบคุมโปรแกรม (Dashboard)
-     สั่งรันไฟล์ควบคุมหลักเพื่อเปิดหน้า GUI:
-     ```bash
-     python dashboard.py
-     ```
-     *(เมื่อเปิดครั้งแรก ระบบจะสแกนหาและสร้างไฟล์ `config.json`
-     ให้โดยอัตโนมัติ)*
+จากนั้นกดปุ่ม **"💾 Save Config"** เพื่อบันทึกค่าการตั้งค่าทั้งหมดเก็บไว้
 
-     ### ขั้นตอนที่ 5: ตั้งค่าผ่านหน้าจอ GUI
-     กรอกรายละเอียดต่าง ๆ บนหน้าต่างควบคุม:
+### ขั้นตอนที่ 6: เริ่มต้นและหยุดการก๊อปปี้เทรด
+*   **เริ่มระบบ**: กดปุ่ม **"▶ Start CopyTrade"** โปรแกรมจะทำการเปิดสคริปต์เชื่อมต่อและเริ่มทำงานทันทีพร้อมรายงาน Log แบบสด ๆ ในกล่องข้อความด้านล่าง
+*   **หยุดระบบ**: กดปุ่ม **"■ Stop CopyTrade"** เพื่อยกเลิกกระบวนการคัดลอกออเดอร์ทั้งหมดอย่างปลอดภัย
 
-     1.  **MetaTrader 5 Terminals Configuration**:
-         *   **Investor Terminal (.exe)**: กดปุ่ม **Browse...**
-     แล้วเลือกไฟล์ `terminal64.exe` ของโปรแกรม MT5
-     ที่ล็อกอินพอร์ต Investor ไว้
-         *   **Client Terminal (.exe)**: กดปุ่ม **Browse...**
-     แล้วเลือกไฟล์ `terminal64.exe` ของโปรแกรม MT5
-     ที่ล็อกอินพอร์ต Client ไว้
-     2.  **Redis Connection**:
-         *   **Redis Host**: พิมพ์ `localhost` (หรือใส่ IP/Host
-     ปลายทางกรณีใช้ Redis Server ภายนอก)
-         *   **Redis Port**: ใส่ `6379`
-         *   **Redis DB**: ใส่ `0`
-         *   **Channel Name**: พิมพ์ชื่อช่องส่งสัญญาณ เช่น
-     `copy_trade_gold`
-     3.  **Copy Trade Settings**:
-         *   **Gold Symbol**: ระบุสัญลักษณ์ทองคำของพอร์ตปลายทาง
-     (Client) เช่น `XAUUSD`, `XAUUSD-ECN`, หรือ `XAUUSD.m`
-     (โปรดเช็คตัวสะกดจากโปรแกรมเทรดให้ตรงกัน)
-         *   **Lot Multiplier**: อัตราตัวคูณในการก๊อปปี้ล็อต
-     เช่น ใส่ `0.5` หาก Investor เปิดล็อตขนาด `1.0` ล็อตฝั่ง
-     Client จะเปิดจริงที่ `0.5`
-         *   **Min Lot Limit**:
-     ขนาดล็อตขั้นต่ำที่ระบบสามารถกดเปิดได้ เช่น `0.01`
-         *   **Poll Interval (s)**: ความถี่ในการสแกนพอร์ต
-     Investor (แนะนำตั้งไว้ที่ `0.05` วินาที)
-         *   **Magic Number**:
-     หมายเลขเมจิกเพื่อคัดแยกคำสั่งซื้อขายของระบบ (เช่น `999999`)
-         *   **Max Deviation**:
-     ค่าเบี่ยงเบนราคาที่ยอมรับได้สูงสุดในการกดคำสั่งซื้อขาย
-     (เช่น `20` จุด)
+---
 
-     จากนั้นกดปุ่ม **"💾 Save Config"**
-     เพื่อบันทึกค่าการตั้งค่าทั้งหมดเก็บไว้
+## 🔒 ข้อมูลความปลอดภัยและคำแนะนำที่สำคัญ (Technical Notes)
 
-     ### ขั้นตอนที่ 6: เริ่มต้นและหยุดการก๊อปปี้เทรด
-     *   **เริ่มระบบ**: กดปุ่ม **"▶ Start CopyTrade"**
-     โปรแกรมจะทำการเปิดสคริปต์เชื่อมต่อและเริ่มทำงานทันทีพร้อมรา
-       ยงาน
-       Log แบบสด ๆ ในกล่องข้อความด้านล่าง
-       *   **หยุดระบบ**: กดปุ่ม **"■ Stop CopyTrade"**
-       เพื่อยกเลิกกระบวนการคัดลอกออเดอร์ทั้งหมดอย่างปลอดภัย
+*   **ระบบล้างตั๋วอัตโนมัติ**: หากออเดอร์ฝั่ง Client ปิดตัวเองไปด้วยการชนกำไร (Take Profit) หรือขาดทุน (Stop Loss) โค้ดจะสังเกตเห็นและล้างสถานะตั๋วที่ค้างคู่อยู่ออกจาก `mappings.json` เองโดยอัตโนมัติ ป้องกันข้อผิดพลาดในการสั่งปิดรอบถัดไป
+*   **สัญญลักษณ์ทองคำเท่านั้น**: ระบบจะทำการกรองสัญญาณและส่งเฉพาะคู่เงินที่มีคำว่า **"XAUUSD"** เท่านั้น โดยคู่เงินอื่นจะถูกมองข้ามเพื่อป้องกันความสับสน
 
-     ---
+---
 
-     ## 🔒 ข้อมูลความปลอดภัยและคำแนะนำที่สำคัญ (Technical Notes)
+## 📝 สัญญาอนุญาต (License)
 
-     *   **ระบบล้างตั๋วอัตโนมัติ**: หากออเดอร์ฝั่ง Client
-     ปิดตัวเองไปด้วยการชนกำไร (Take Profit) หรือขาดทุน (Stop
-      Loss) โค้ดจะสังเกตเห็นและล้างสถานะตั๋วที่ค้างคู่อยู่ออกจาก
-      `mappings.json` เองโดยอัตโนมัติ
-      ป้องกันข้อผิดพลาดในการสั่งปิดรอบถัดไป
-      *   **สัญญลักษณ์ทองคำเท่านั้น**:
-       ระบบจะทำการกรองสัญญาณและส่งเฉพาะคู่เงินที่มีคำว่า
-         **"XAUUSD"** เท่านั้น
-         โดยคู่เงินอื่นจะถูกมองข้ามเพื่อป้องกันความสับสน
-
-     ---
-
-     ## 📝 สัญญาอนุญาต (License)
-
-     โปรเจคนี้เผยแพร่ภายใต้สัญญาอนุญาต **MIT License**
-     รายละเอียดเพิ่มเติมสามารถศึกษาได้ในไฟล์
-     [LICENSE](file:///root/mt5-investor-copytrade/LICENSE)
+โปรเจคนี้เผยแพร่ภายใต้สัญญาอนุญาต **MIT License** รายละเอียดเพิ่มเติมสามารถศึกษาได้ในไฟล์ [LICENSE](file:///root/mt5-investor-copytrade/LICENSE)

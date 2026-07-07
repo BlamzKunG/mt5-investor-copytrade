@@ -1,15 +1,15 @@
-# 📈 MT5 Investor CopyTrade (Gold Edition)
+# MT5 Investor CopyTrade (Gold Edition)
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![MetaTrader 5](https://img.shields.io/badge/MetaTrader-5-blue)](https://www.metatrader5.com/)
 [![Redis](https://img.shields.io/badge/Redis-Broker-red)](https://redis.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ระบบก๊อปปี้เทรดทองคำ (XAUUSD) ทำงานแบบเรียลไทม์ โดยตรวจจับคำสั่งจากพอร์ต Investor (อ่านได้อย่างเดียว) แล้วส่งสัญญาณไปยังพอร์ต Client เพื่อสั่งเปิด/ปิดออเดอร์ตามการตั้งค่าที่กำหนด
+ระบบก๊อปปี้เทรดทองคำ (XAUUSD) ทำงานแบบเรียลไทม์ โดยตรวจจับคำสั่งจากพอร์ต Investor Account และคัดลอกไปยัง Client Account ผ่าน Redis Pub/Sub
 
 ---
 
-## 🏗️ สถาปัตยกรรมและโครงสร้างระบบ (Architecture Flow)
+## สถาปัตยกรรมและโครงสร้างระบบ (Architecture Flow)
 
 ระบบประกอบด้วยส่วนการทำงานหลัก 3 ส่วนที่ประสานงานกันผ่าน Redis Pub/Sub:
 
@@ -25,7 +25,7 @@ flowchart TD
         end
 
         subgraph CopyTrade_System ["ระบบ CopyTrade"]
-            investor_py["investor.py - คอยตรวจจับและส่งสัญญาณ"]
+            master_py["master.py - คอยตรวจจับและส่งสัญญาณ"]
             client_py["client.py - คอยรับสัญญาณและเปิดปิดออเดอร์"]
             dashboard_py["dashboard.py - GUI ควบคุม"]
             config_json["config.json - เก็บค่าการตั้งค่า"]
@@ -38,8 +38,8 @@ flowchart TD
     end
 
     %% Investor Tracking
-    MT5_Investor -->|ดึงสถานะออเดอร์ล่าสุด| investor_py
-    investor_py -->|เมื่อเกิดออเดอร์ OPEN/CLOSE| Redis
+    MT5_Investor -->|ดึงสถานะออเดอร์ล่าสุด| master_py
+    master_py -->|เมื่อเกิดออเดอร์ OPEN/CLOSE| Redis
 
     %% Client Execution
     Redis -->|กระจายสัญญาณเรียลไทม์| client_py
@@ -48,28 +48,28 @@ flowchart TD
 
     %% GUI Control
     dashboard_py <-->|อ่าน/เขียนข้อมูลการตั้งค่า| config_json
-    dashboard_py -->|เริ่ม-หยุด subprocess| investor_py
+    dashboard_py -->|เริ่ม-หยุด subprocess| master_py
     dashboard_py -->|เริ่ม-หยุด subprocess| client_py
-    investor_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
+    master_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
     client_py -.->|ส่ง log กลับมาแสดงผล| dashboard_py
 ```
 
 ---
 
-## 🌟 ฟีเจอร์เด่น (Key Features)
+## ฟีเจอร์เด่น (Key Features)
 
 - Investor Password Compatibility: รองรับการเชื่อมต่อด้วยรหัสแบบ Investor (ดูได้อย่างเดียว)
-- Ultra-low Latency (Redis): ส่งต่อสัญญาณเข้า/ปิดออเดอร์แบบเรียลไทม์ผ่าน Redis Pub/Sub
-- Order State Recovery (`mappings.json`): จดจำความสัมพันธ์ระหว่าง Ticket ของ Investor และ Client เพื่อรองรับการกู้สถานะคำสั่ง
-- Symbol Custom Mapping: รองรับการแมปชื่อสัญลักษณ์ทองคำที่โบรกเกอร์ต่างกันเรียกต่างชื่อกัน
+- Ultra-low Latency (Redis): ส่��ต่อสัญญาณเข้า/ปิดออเดอร์แบบเรียลไทม์ผ่าน Redis Pub/Sub
+- Order State Recovery (`mappings.json`): จดจำความสัมพันธ์ระหว่าง Ticket ของ Investor และ Client เพื่อรองรับการกู้คืนสถานะได้
+- Symbol Custom Mapping: รองรับการแมปชื่อสัญลักษณ์ทองคำที่โบรกเกอร์ต่างกันเรียกต่างกัน
 - Smart Lot Calculation:
   - `lot_multiplier`: กำหนดอัตราส่วนในการคูณล็อต
   - `lot_minimum`: กำหนดขนาดล็อตขั้นต่ำที่ระบบจะเปิดเพื่อป้องกันคำสั่งเล็กเกินไป
-- Dynamic Logging Interface: GUI แสดง log และข้อผิดพลาดจาก `investor.py` และ `client.py` แบบสด
+- Dynamic Logging Interface: GUI แสดง log และข้อผิดพลาดจาก `master.py` และ `client.py` แบบสด
 
 ---
 
-## 📋 สิ่งที่ต้องมี (Prerequisites)
+## สิ่งที่ต้องมี (Prerequisites)
 
 1. MetaTrader 5 ติดตั้งสองตัว (แยกโฟลเดอร์)
    - MT5 ตัวที่ 1: ลงชื่อเข้าใช้บัญชี Investor (ดูได้อย่างเดียว)
@@ -89,11 +89,11 @@ flowchart TD
 
 ---
 
-## ⚙️ โครงสร้างไฟล์ในโปรเจค (File Structure)
+## โครงสร้างไฟล์ในโปรเจค (File Structure)
 
 ```text
 mt5-investor-copytrade/
-├── investor.py        # ตรวจสอบคำสั่งซื้อขายของพอร์ต Investor และส่งสัญญาณผ่าน Redis
+├── master.py          # ตรวจสอบคำสั่งซื้อขายของพอร์ต Investor และส่งสัญญาณผ่าน Redis
 ├── client.py          # รับสัญญาณจาก Redis เพื่อสั่งเปิด/ปิดออเดอร์บน Client MT5
 ├── dashboard.py       # GUI ควบคุมโปรแกรม สั่งเริ่ม/หยุด และแสดง Log
 ├── config.json        # เก็บการตั้งค่า (สร้างอัตโนมัติเมื่อรันครั้งแรก)
@@ -104,7 +104,7 @@ mt5-investor-copytrade/
 
 ---
 
-## 🚀 ขั้นตอนการติดตั้งและการใช้งาน (Usage Guide)
+## ขั้นตอนการติดตั้งและการใช้งาน (Usage Guide)
 
 1. ดาวน์โหลดหรือโคลนโปรเจค:
 
@@ -138,7 +138,7 @@ python dashboard.py
 
 ---
 
-## 🔒 ข้อควรระวัง (Technical Notes)
+## ข้อควรระวัง (Technical Notes)
 
 - ระบบกรองสัญญาณเฉพาะสัญลักษณ์ที่กำหนด (เช่น XAUUSD)
 - ตรวจสอบสิทธิ์การใช้งานและความปลอดภัยของบัญชี Client ก่อนใช้งานจริง
@@ -146,6 +146,6 @@ python dashboard.py
 
 ---
 
-## 📝 สัญญาอนุญาต (License)
+## สัญญาอนุญาต (License)
 
 โปรเจคนี้ใช้สัญญาอนุญาต MIT License ดูรายละเอียดในไฟล์ LICENSE
